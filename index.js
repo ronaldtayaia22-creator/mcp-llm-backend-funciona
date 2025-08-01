@@ -1,64 +1,55 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import { config } from 'dotenv';
-import { OpenAI } from 'openai';
+import express from "express";
+import dotenv from "dotenv";
+import cors from "cors";
+import bodyParser from "body-parser";
+import { OpenAI } from "openai";
 
-config(); // Cargar variables de entorno
+dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+app.use(cors());
 app.use(bodyParser.json());
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
-// Endpoint principal
-app.post('/', async (req, res) => {
-  try {
-    const userMessage = req.body.input;
-    const tools = req.body.tools || [];
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo-0125',
-      messages: [{ role: 'user', content: userMessage }],
-      tools: tools,
-      tool_choice: 'auto'
-    });
-
-    const responseMessage = completion.choices[0].message;
-    res.json(responseMessage);
-  } catch (error) {
-    console.error('Error en /:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-
-// Endpoint requerido por ElevenLabs para leer tools
-app.get('/tools', (req, res) => {
+// Este endpoint define los tools disponibles
+app.get("/tools", (req, res) => {
   res.json({
     tools: [
       {
-        name: 'createEvent',
-        description: 'Crea una nueva cita en Google Calendar.',
-        input_schema: {
-          type: 'object',
+        name: "createEvent",
+        description: "Crea una cita en Google Calendar.",
+        parameters: {
+          type: "object",
           properties: {
-            nombre: { type: 'string' },
-            email: { type: 'string' },
-            telefono: { type: 'string' },
-            servicio: { type: 'string' },
-            start: { type: 'string' },
-            end: { type: 'string' }
+            nombre: { type: "string" },
+            email: { type: "string" },
+            telefono: { type: "string" },
+            servicio: { type: "string" },
+            start: { type: "string" },
+            end: { type: "string" },
           },
-          required: ['nombre', 'email', 'telefono', 'servicio', 'start', 'end']
-        }
-      }
-    ]
+          required: ["nombre", "email", "telefono", "servicio", "start", "end"],
+        },
+      },
+    ],
   });
 });
 
+// Este endpoint ejecuta un tool
+app.post("/tools/:tool", async (req, res) => {
+  const tool = req.params.tool;
+  const input = req.body.input;
+
+  if (tool === "createEvent") {
+    console.log("Ejecutando createEvent con:", input);
+    res.json({ result: "Evento creado (simulado)" });
+  } else {
+    res.status(404).json({ error: "Tool no encontrado" });
+  }
+});
+
 app.listen(port, () => {
-  console.log(`Servidor MCP LLM activo en el puerto ${port}`);
+  console.log(`Servidor MCP iniciado en puerto ${port}`);
 });
