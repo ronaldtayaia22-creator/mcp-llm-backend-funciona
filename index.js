@@ -1,42 +1,49 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import fetch from 'node-fetch';
-import dotenv from 'dotenv';
-dotenv.config();
+const express = require("express");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const { OpenAI } = require("openai");
+require("dotenv").config();
 
 const app = express();
 const port = process.env.PORT || 8080;
+
+app.use(cors());
 app.use(bodyParser.json());
 
-app.post('/', async (req, res) => {
-  const { query, tools } = req.body;
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+app.post("/tool-calls", async (req, res) => {
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+    const userPrompt = req.body.prompt || "";
+    const toolsInfo = req.body.tools || [];
+
+    const toolsList = toolsInfo.map(tool => `Tool: ${tool.name}\nDescription: ${tool.description}`).join("\n\n");
+
+    const messages = [
+      {
+        role: "system",
+        content: `You are a backend processor for an AI agent. Here is a list of available tools:\n\n${toolsList}`,
       },
-      body: JSON.stringify({
-        model: 'gpt-3.5-turbo-0125',
-        messages: [
-          { role: 'system', content: 'Eres un agente que decide si debe ejecutar una herramienta o responder directamente.' },
-          { role: 'user', content: query }
-        ],
-        tools,
-        tool_choice: "auto"
-      }),
+      {
+        role: "user",
+        content: userPrompt,
+      },
+    ];
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo-0125",
+      messages: messages,
+      temperature: 0,
     });
 
-    const data = await response.json();
-    res.json(data);
+    const reply = completion.choices[0].message.content;
+    res.status(200).json({ message: reply });
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).send('Error en el MCP');
+    console.error("Error handling tool-call:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Servidor MCP escuchando en el puerto ${port}`);
+  console.log(`MCP LLM backend listening on port ${port}`);
 });
